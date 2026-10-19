@@ -58,7 +58,7 @@
   // ---------- 데이터 ----------
   async function load() {
     try {
-      const res = await fetch("data/index.json");
+      const res = await fetch("index.json");
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
       state.items = data.items;
@@ -74,7 +74,7 @@
   }
 
   async function loadFull() {
-    const res = await fetch("data/full.json");
+    const res = await fetch("full.json");
     if (!res.ok) throw new Error(res.status);
     state.full = await res.json();
     state.lowerFull = state.full.map((t) => t.toLowerCase());

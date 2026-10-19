@@ -8,14 +8,15 @@
 ## 파일 구조
 
 ```
-index.html      메인 화면
-about.html      출처와 라이선스
-style.css       스타일
-app.js          검색·필터·상세·복사
-data/index.json 목록용 요약 데이터
-data/full.json  프롬프트 본문 (index.json과 같은 순서)
-licenses/       원본 라이선스 전문
-vercel.json     Vercel 설정
+index.html            메인 화면
+about.html            출처와 라이선스
+style.css             스타일
+app.js                검색·필터·상세·복사
+index.json            목록용 요약 데이터
+full.json             프롬프트 본문 (index.json과 같은 순서)
+prompts-chat-CC0.txt  prompts.chat 라이선스 전문
+fabric-MIT.txt        Fabric 라이선스 전문
+vercel.json           Vercel 설정
 ```
 
 ## 로컬에서 보기
