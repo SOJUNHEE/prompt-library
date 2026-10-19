@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프롬프트 서랍</title>
+<meta name="description" content="공개 라이선스 AI 프롬프트 2,796개를 검색하고, 빈칸을 채워 바로 복사하는 모음집">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='8' width='26' height='18' rx='3' fill='%2318233A'/%3E%3Crect x='11' y='15' width='10' height='4' rx='2' fill='%23F6E35A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#list">목록으로 바로가기</a>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>프롬프트 서랍</h1>
+      <p class="lede">공개 라이선스로 풀린 AI 프롬프트를 한곳에 모았어요. 찾고, <span class="slot-demo">빈칸</span>을 채워서, 복사해 쓰세요.</p>
+    </div>
+    <form class="search" role="search" onsubmit="return false">
+      <label class="sr-only" for="q">프롬프트 검색</label>
+      <input id="q" type="search" autocomplete="off" spellcheck="false"
+             placeholder="찾을 내용을 입력하세요 (예: 이메일, 요약, marketing)">
+      <p class="count" id="count" aria-live="polite">불러오는 중…</p>
+    </form>
+    <p class="hint" id="hint">프롬프트 본문은 영어예요. 한국어로 검색하면 자주 쓰는 단어는 영어로 바꿔서 함께 찾아요.</p>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="filters" aria-label="필터">
+    <fieldset>
+      <legend>출처</legend>
+      <div class="seg" id="src">
+        <button type="button" data-v="all" aria-pressed="true">전체</button>
+        <button type="button" data-v="pc" aria-pressed="false">prompts.chat</button>
+        <button type="button" data-v="fb" aria-pressed="false">Fabric</button>
+      </div>
+    </fieldset>
+    <button type="button" class="more-toggle" id="moreToggle" aria-expanded="false" aria-controls="moreFilters">필터 더 보기</button>
+    <div class="more-filters" id="moreFilters">
+    <fieldset>
+      <legend>종류</legend>
+      <div class="chips" id="kind"></div>
+    </fieldset>
+    <fieldset>
+      <legend>보기 옵션</legend>
+      <label class="check"><input type="checkbox" id="onlyVars"> 빈칸 있는 것만</label>
+      <label class="check"><input type="checkbox" id="devs"> 개발자용만</label>
+      <label class="select-wrap">정렬
+        <select id="sort">
+          <option value="default">기본 순서</option>
+          <option value="title">이름순</option>
+          <option value="short">짧은 것부터</option>
+          <option value="long">긴 것부터</option>
+        </select>
+      </label>
+    </fieldset>
+    </div>
+    <p class="filters-foot"><a href="about.html">출처와 라이선스</a></p>
+  </aside>
+
+  <section class="results" aria-label="검색 결과">
+    <ol class="list" id="list"></ol>
+    <div class="empty" id="empty" hidden>
+      <p>맞는 프롬프트가 없어요.</p>
+      <p>검색어를 줄이거나 영어로 바꿔 보세요. 필터가 켜져 있다면 <button type="button" class="link" id="reset">필터를 모두 풀기</button></p>
+    </div>
+    <div id="sentinel" aria-hidden="true"></div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" hidden>
+  <div class="d-head">
+    <div>
+      <p class="d-src" id="d-src"></p>
+      <h2 id="d-title"></h2>
+    </div>
+    <button type="button" class="icon-btn" id="d-close" aria-label="닫기">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="d-body">
+    <form class="vars" id="d-vars" hidden onsubmit="return false">
+      <h3>빈칸 채우기</h3>
+      <p class="vars-note">입력한 내용이 아래 프롬프트에 바로 들어가요. 비워 두면 원래 예시 값이 들어가요.</p>
+      <div id="d-fields"></div>
+    </form>
+    <pre class="prompt" id="d-text"></pre>
+  </div>
+  <div class="d-actions">
+    <button type="button" class="btn primary" id="d-copy">복사하기</button>
+    <a class="btn ghost" id="d-link" target="_blank" rel="noopener">원본 보기</a>
+    <span class="toast" id="toast" role="status" aria-live="polite"></span>
+  </div>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>
