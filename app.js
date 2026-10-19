@@ -43,7 +43,12 @@
     scrim: $("scrim"), drawer: $("drawer"), dSrc: $("d-src"), dTitle: $("d-title"),
     dClose: $("d-close"), dVars: $("d-vars"), dFields: $("d-fields"), dText: $("d-text"),
     dCopy: $("d-copy"), dLink: $("d-link"), toast: $("toast"),
+    bar: $("bar"), filters: $("filters"), filterBtn: $("filterBtn"), badge: $("filterBadge"),
+    sheetClose: $("sheetClose"), applyBtn: $("applyBtn"), resetSheet: $("resetSheet"), resetSide: $("resetSide"),
   };
+  const mobile = window.matchMedia("(max-width: 820px)");
+  const KO_KEYS = Object.keys(KO).sort((a, b) => b.length - a.length);
+  const DEFAULT_HINT = "프롬프트 본문은 영어예요. 한국어로 검색하면 자주 쓰는 단어는 영어로 바꿔서 함께 찾아요.";
 
   const state = {
     items: [], meta: null, full: null, lowerFull: null, lowerTitle: [],
@@ -65,9 +70,10 @@
       state.meta = data.meta;
       state.lowerTitle = state.items.map((x) => (x.t + " " + x.p + " " + (x.id || "")).toLowerCase());
       buildKindChips();
-      readHash();
-      apply();
       fullPromise = loadFull();
+      fullPromise.catch(() => {});
+      apply(true);
+      readHash();
     } catch (e) {
       el.count.textContent = "목록을 불러오지 못했어요. 새로고침해 주세요.";
     }
@@ -87,11 +93,10 @@
     const out = [];
     const ko = [];
     for (const raw of q.toLowerCase().split(/\s+/).filter(Boolean)) {
-      let word = raw;
-      // 조사 떼기: "이메일을" → "이메일"
-      const stem = Object.keys(KO).find((k) => raw === k || (raw.startsWith(k) && raw.length - k.length <= 2));
+      // 정확히 같은 단어 먼저, 없으면 조사가 붙은 경우("이메일을" → "이메일")만 긴 단어부터
+      const stem = KO[raw] ? raw : KO_KEYS.find((k) => raw.startsWith(k) && raw.length - k.length <= 2 && k.length >= 2);
       if (stem) { ko.push([stem, KO[stem]]); out.push([raw, KO[stem]]); continue; }
-      out.push([word]);
+      out.push([raw]);
     }
     return { out, ko };
   }
@@ -133,11 +138,29 @@
     el.empty.hidden = res.length > 0;
 
     if (ko.length) {
+      el.hint.className = "hint";
       el.hint.innerHTML = "함께 찾는 영어 단어: " + ko.map(([k, e]) => `${esc(k)} → <span class="terms">${esc(e)}</span>`).join(", ");
     } else {
-      el.hint.textContent = "프롬프트 본문은 영어예요. 한국어로 검색하면 자주 쓰는 단어는 영어로 바꿔서 함께 찾아요.";
+      el.hint.className = "hint default";
+      el.hint.textContent = DEFAULT_HINT;
     }
-    if (!keepScroll && window.scrollY > el.list.offsetTop) window.scrollTo({ top: el.list.offsetTop - 80 });
+    el.applyBtn.textContent = `결과 ${fmt(res.length)}개 보기`;
+    updateBadge();
+    if (!keepScroll) {
+      const listTop = el.list.getBoundingClientRect().top + window.scrollY - el.bar.offsetHeight - 8;
+      if (window.scrollY > listTop) window.scrollTo({ top: listTop });
+    }
+  }
+
+  function activeFilterCount() {
+    return (state.src !== "all") + (state.kind !== "all") + state.onlyVars + state.devs + (state.sort !== "default");
+  }
+  function updateBadge() {
+    const n = activeFilterCount();
+    el.badge.hidden = n === 0;
+    el.badge.textContent = n;
+    el.filterBtn.classList.toggle("active", n > 0);
+    el.filterBtn.setAttribute("aria-label", n ? `필터, ${n}개 적용 중` : "필터");
   }
 
   function highlight(text, tlist) {
@@ -184,18 +207,61 @@
   }, { rootMargin: "600px" }).observe(el.sentinel);
 
   // ---------- 종류 칩 ----------
+  // 출처별로 묶어서 보여 줌 (prompts.chat은 형식, Fabric은 하는 일 기준이라 섞이면 헷갈림)
+  const kindOpen = { pc: false, fb: false };
   function buildKindChips() {
-    const counts = new Map();
+    const groups = { pc: new Map(), fb: new Map() };
     for (const x of state.items) {
       if (state.src !== "all" && x.s !== state.src) continue;
-      counts.set(x.k, (counts.get(x.k) || 0) + 1);
+      groups[x.s].set(x.k, (groups[x.s].get(x.k) || 0) + 1);
     }
-    if (state.kind !== "all" && !counts.has(state.kind)) state.kind = "all";
-    const kinds = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-    el.kind.innerHTML =
-      `<button type="button" data-v="all" aria-pressed="${state.kind === "all"}">전체</button>` +
-      kinds.map(([k, n]) => `<button type="button" data-v="${esc(k)}" aria-pressed="${state.kind === k}">${esc(k)}<span class="n">${fmt(n)}</span></button>`).join("");
+    const all = new Set([...groups.pc.keys(), ...groups.fb.keys()]);
+    if (state.kind !== "all" && !all.has(state.kind)) state.kind = "all";
+    const chip = (v, label, n) =>
+      `<button type="button" data-v="${esc(v)}" aria-pressed="${state.kind === v}"><span>${esc(label)}</span>${n != null ? `<span class="n">${fmt(n)}</span>` : ""}</button>`;
+    let html = `<div class="kgroup"><div class="kchips">${chip("all", "전체")}</div></div>`;
+    for (const s of ["pc", "fb"]) {
+      if (!groups[s].size) continue;
+      const kinds = [...groups[s].entries()].sort((a, b) => b[1] - a[1]);
+      const selectedHidden = kinds.findIndex(([k]) => k === state.kind) >= 6;
+      const collapse = kinds.length > 7 && !kindOpen[s] && !selectedHidden;
+      html += `<div class="kgroup"><p class="kgroup-title ${s}">${s === "pc" ? "prompts.chat · 형식" : "Fabric · 하는 일"}</p>` +
+        `<div class="kchips${collapse ? " collapsed" : ""}">${kinds.map(([k, n]) => chip(k, k, n)).join("")}</div>` +
+        (collapse ? `<button type="button" class="kmore" data-more="${s}">${kinds.length - 6}개 더 보기</button>` : "") +
+        `</div>`;
+    }
+    el.kind.innerHTML = html;
   }
+
+  // ---------- 모바일 필터 시트 ----------
+  function openSheet() {
+    el.filters.classList.add("open");
+    el.filterBtn.setAttribute("aria-expanded", "true");
+    el.scrim.hidden = false;
+    document.body.classList.add("locked");
+    el.sheetClose.focus();
+  }
+  function closeSheet(focusBack = true) {
+    if (!el.filters.classList.contains("open")) return;
+    el.filters.classList.remove("open");
+    el.filterBtn.setAttribute("aria-expanded", "false");
+    if (el.drawer.hidden) { el.scrim.hidden = true; document.body.classList.remove("locked"); }
+    if (focusBack) el.filterBtn.focus();
+  }
+  function resetFilters() {
+    state.src = "all"; state.kind = "all"; state.onlyVars = false; state.devs = false; state.sort = "default";
+    el.onlyVars.checked = false; el.devs.checked = false; el.sort.value = "default";
+    for (const x of el.src.children) x.setAttribute("aria-pressed", String(x.dataset.v === "all"));
+    buildKindChips();
+    apply();
+  }
+
+  // 고정 검색줄 높이를 CSS에 알려 줌 (사이드바·스크롤 위치 계산용)
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--bar-h", el.bar.offsetHeight + "px");
+  }).observe(el.bar);
+  new IntersectionObserver(([e]) => el.bar.classList.toggle("stuck", !e.isIntersecting))
+    .observe(document.querySelector(".top"));
 
   // ---------- 상세 ----------
   function parseVars(text) {
@@ -252,7 +318,7 @@
     el.toast.textContent = "";
     el.scrim.hidden = false;
     el.drawer.hidden = false;
-    document.body.style.overflow = "hidden";
+    document.body.classList.add("locked");
     el.dClose.focus();
     if (location.hash !== "#p" + i) history.replaceState(null, "", "#p" + i);
 
@@ -286,7 +352,7 @@
   function close() {
     el.drawer.hidden = true;
     el.scrim.hidden = true;
-    document.body.style.overflow = "";
+    document.body.classList.remove("locked");
     state.openId = null;
     history.replaceState(null, "", location.pathname + location.search);
     if (state.lastFocus && document.contains(state.lastFocus)) state.lastFocus.focus();
@@ -327,46 +393,55 @@
     state.src = b.dataset.v;
     for (const x of el.src.children) x.setAttribute("aria-pressed", String(x === b));
     buildKindChips();
-    apply();
+    apply(mobile.matches);
   });
   el.kind.addEventListener("click", (e) => {
-    const b = e.target.closest("button");
+    const more = e.target.closest("button[data-more]");
+    if (more) { kindOpen[more.dataset.more] = true; buildKindChips(); return; }
+    const b = e.target.closest("button[data-v]");
     if (!b) return;
     state.kind = b.dataset.v;
-    for (const x of el.kind.children) x.setAttribute("aria-pressed", String(x === b));
-    apply();
+    for (const x of el.kind.querySelectorAll("button[data-v]")) x.setAttribute("aria-pressed", String(x === b));
+    apply(mobile.matches);
   });
-  el.onlyVars.addEventListener("change", () => { state.onlyVars = el.onlyVars.checked; apply(); });
-  el.devs.addEventListener("change", () => { state.devs = el.devs.checked; apply(); });
-  el.sort.addEventListener("change", () => { state.sort = el.sort.value; apply(); });
-  el.reset.addEventListener("click", () => {
-    state.src = "all"; state.kind = "all"; state.onlyVars = false; state.devs = false;
-    el.onlyVars.checked = false; el.devs.checked = false;
-    for (const x of el.src.children) x.setAttribute("aria-pressed", String(x.dataset.v === "all"));
-    buildKindChips();
-    apply();
+  el.onlyVars.addEventListener("change", () => { state.onlyVars = el.onlyVars.checked; apply(mobile.matches); });
+  el.devs.addEventListener("change", () => { state.devs = el.devs.checked; apply(mobile.matches); });
+  el.sort.addEventListener("change", () => { state.sort = el.sort.value; apply(mobile.matches); });
+  el.reset.addEventListener("click", resetFilters);
+  el.resetSide.addEventListener("click", resetFilters);
+  el.resetSheet.addEventListener("click", resetFilters);
+  el.filterBtn.addEventListener("click", () => (el.filters.classList.contains("open") ? closeSheet() : openSheet()));
+  el.sheetClose.addEventListener("click", () => closeSheet());
+  el.applyBtn.addEventListener("click", () => {
+    closeSheet(false);
+    const listTop = el.list.getBoundingClientRect().top + window.scrollY - el.bar.offsetHeight - 8;
+    if (window.scrollY > listTop) window.scrollTo({ top: listTop });
   });
+  const setPlaceholder = () => {
+    el.q.placeholder = mobile.matches ? "검색 (예: 이메일, 요약)" : "찾을 내용 (예: 이메일, 요약, marketing)";
+  };
+  setPlaceholder();
+  mobile.addEventListener("change", () => { setPlaceholder(); if (!mobile.matches) closeSheet(false); });
   el.list.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-i]");
     if (b) open(Number(b.dataset.i));
   });
-  const moreToggle = $("moreToggle");
-  moreToggle.addEventListener("click", () => {
-    const open = moreToggle.getAttribute("aria-expanded") !== "true";
-    moreToggle.setAttribute("aria-expanded", String(open));
-    $("moreFilters").classList.toggle("open", open);
-    moreToggle.textContent = open ? "필터 접기" : "필터 더 보기";
-  });
   el.dClose.addEventListener("click", close);
-  el.scrim.addEventListener("click", close);
+  el.scrim.addEventListener("click", () => (el.drawer.hidden ? closeSheet() : close()));
+  function trap(e, box, sel) {
+    const f = [...box.querySelectorAll(sel)].filter((n) => n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !el.drawer.hidden) close();
-    if (e.key === "/" && document.activeElement !== el.q && el.drawer.hidden) { e.preventDefault(); el.q.focus(); }
-    if (e.key === "Tab" && !el.drawer.hidden) {
-      const f = el.drawer.querySelectorAll("button, a[href], input, select, textarea");
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    const sheetOpen = el.filters.classList.contains("open");
+    if (e.key === "Escape") { if (!el.drawer.hidden) close(); else if (sheetOpen) closeSheet(); }
+    if (e.key === "/" && document.activeElement !== el.q && el.drawer.hidden && !sheetOpen) { e.preventDefault(); el.q.focus(); }
+    if (e.key === "Tab") {
+      if (!el.drawer.hidden) trap(e, el.drawer, "button, a[href], input, select, textarea");
+      else if (sheetOpen) trap(e, el.filters, "button, a[href], input, select");
     }
   });
   window.addEventListener("hashchange", () => {
