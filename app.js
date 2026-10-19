@@ -43,12 +43,15 @@
     scrim: $("scrim"), drawer: $("drawer"), dSrc: $("d-src"), dTitle: $("d-title"),
     dClose: $("d-close"), dVars: $("d-vars"), dFields: $("d-fields"), dText: $("d-text"),
     dCopy: $("d-copy"), dLink: $("d-link"), toast: $("toast"),
+    dEn: $("d-en"), dKo: $("d-ko"), dKoText: $("d-ko-text"), koReply: $("koReply"),
     bar: $("bar"), filters: $("filters"), filterBtn: $("filterBtn"), badge: $("filterBadge"),
     sheetClose: $("sheetClose"), applyBtn: $("applyBtn"), resetSheet: $("resetSheet"), resetSide: $("resetSide"),
   };
   const mobile = window.matchMedia("(max-width: 820px)");
   const KO_KEYS = Object.keys(KO).sort((a, b) => b.length - a.length);
-  const DEFAULT_HINT = "프롬프트 본문은 영어예요. 한국어로 검색하면 자주 쓰는 단어는 영어로 바꿔서 함께 찾아요.";
+  const DEFAULT_HINT = "한글 제목·설명으로 찾을 수 있어요. 영어 원문 본문까지 찾으려면 영어 단어도 써 보세요.";
+  const KO_REPLY = "\n\n답변은 한국어로 해 주세요.";
+  try { const v = localStorage.getItem("koReply"); if (v !== null) document.getElementById("koReply").checked = v === "1"; } catch (e) {}
 
   const state = {
     items: [], meta: null, full: null, lowerFull: null, lowerTitle: [],
@@ -68,7 +71,7 @@
       const data = await res.json();
       state.items = data.items;
       state.meta = data.meta;
-      state.lowerTitle = state.items.map((x) => (x.t + " " + x.p + " " + (x.id || "")).toLowerCase());
+      state.lowerTitle = state.items.map((x) => [x.t, x.p, x.id || "", x.kt || "", x.kd || ""].join(" ").toLowerCase());
       buildKindChips();
       fullPromise = loadFull();
       fullPromise.catch(() => {});
@@ -121,7 +124,7 @@
       res.push(i);
     }
     const it = state.items;
-    if (state.sort === "title") res.sort((a, b) => it[a].t.localeCompare(it[b].t, "en"));
+    if (state.sort === "title") res.sort((a, b) => (it[a].kt || it[a].t).localeCompare(it[b].kt || it[b].t, "ko"));
     else if (state.sort === "short") res.sort((a, b) => it[a].n - it[b].n);
     else if (state.sort === "long") res.sort((a, b) => it[b].n - it[a].n);
 
@@ -191,11 +194,11 @@
       li.className = "row";
       li.innerHTML =
         `<button type="button" data-i="${i}">` +
-        `<span class="r-title">${highlight(x.t, out)}</span>` +
+        `<span class="r-title">${highlight(x.kt || x.t, out)}${x.kt ? `<span class="r-en">${highlight(x.t, out)}</span>` : ""}</span>` +
         `<span class="r-meta">${x.v ? `<span class="vars-n">빈칸 ${x.v}</span>` : ""}` +
         `<span class="src ${x.s}">${x.s === "pc" ? "prompts.chat" : "Fabric"}</span>` +
         `<span>${esc(x.k)}</span><span>${fmt(x.n)}자</span></span>` +
-        `<span class="r-prev">${slotPreview(highlight(x.p, out))}</span></button>`;
+        `<span class="r-prev">${x.kd ? highlight(x.kd, out) : slotPreview(highlight(x.p, out))}</span></button>`;
       frag.appendChild(li);
     }
     el.list.appendChild(frag);
@@ -304,7 +307,11 @@
     state.openId = i;
     state.values = {};
     if (!fromHash) state.lastFocus = document.activeElement;
-    el.dTitle.textContent = x.t;
+    el.dTitle.textContent = x.kt || x.t;
+    el.dEn.textContent = x.kt ? x.t : "";
+    el.dEn.hidden = !x.kt;
+    el.dKoText.textContent = x.kd || "";
+    el.dKo.hidden = !x.kd;
     el.dSrc.innerHTML =
       `<span class="src ${x.s}">${x.s === "pc" ? "prompts.chat" : "Fabric"}</span>` +
       `<span>${esc(x.k)}</span>` +
@@ -359,6 +366,7 @@
   }
 
   async function copy(text, hasVars) {
+    if (el.koReply.checked) text += KO_REPLY;
     try {
       await navigator.clipboard.writeText(text);
     } catch (e) {
@@ -371,7 +379,7 @@
       document.execCommand("copy");
       ta.remove();
     }
-    el.toast.textContent = hasVars ? "빈칸을 채운 내용으로 복사했어요" : "복사했어요";
+    el.toast.textContent = (hasVars ? "빈칸을 채운 내용으로 복사했어요" : "복사했어요") + (el.koReply.checked ? " (한국어 답변 요청 포함)" : "");
     clearTimeout(copy.t);
     copy.t = setTimeout(() => (el.toast.textContent = ""), 2400);
   }
@@ -426,6 +434,7 @@
     const b = e.target.closest("button[data-i]");
     if (b) open(Number(b.dataset.i));
   });
+  el.koReply.addEventListener("change", () => { try { localStorage.setItem("koReply", el.koReply.checked ? "1" : "0"); } catch (e) {} });
   el.dClose.addEventListener("click", close);
   el.scrim.addEventListener("click", () => (el.drawer.hidden ? closeSheet() : close()));
   function trap(e, box, sel) {

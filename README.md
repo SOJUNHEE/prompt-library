@@ -6,20 +6,21 @@
 
 | 주소 | 내용 |
 |---|---|
-| `/` (index.html) | 정리 노트: 기법 30개 설명 + 예시 프롬프트 174개(복사 버튼) + APE 프롬프트 생성기 |
-| `/library` (library.html) | 공개 프롬프트 모음 2,796개 (prompts.chat CC0, Fabric MIT) |
+| `/` (index.html) | 공개 프롬프트 모음 2,784개 (prompts.chat CC0, Fabric MIT) + 한글 제목·설명 |
+| `/notes` (notes.html) | 수업 정리 노트: 기법 30개 설명 + 예시 프롬프트 174개(복사 버튼) + APE 프롬프트 생성기 |
 | `/about` (about.html) | 출처와 라이선스 |
 
 ## 파일 구조
 
 ```
-index.html            정리 노트 화면
+index.html            첫 화면: 공개 프롬프트 모음
+style.css, app.js     프롬프트 모음 스타일과 동작
+index.json            목록 데이터 (영어 제목, 한글 제목 kt, 한글 설명 kd 등)
+full.json             프롬프트 본문 (index.json과 같은 순서)
+notes.html            수업 정리 노트 화면
 notes.css             정리 노트 스타일 (반응형, 모바일은 ☰ 메뉴)
 notes.js              정리 노트 내용 (기법 설명 + 수업 예시 프롬프트)
 main.js               목차, 검색, 복사, 생성기
-library.html          공개 프롬프트 모음 화면
-style.css, app.js     프롬프트 모음 스타일과 동작
-index.json, full.json 프롬프트 모음 데이터
 about.html            출처와 라이선스
 *.txt                 라이선스 전문
 vercel.json           Vercel 설정
